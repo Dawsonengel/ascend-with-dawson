@@ -4,6 +4,9 @@ export type BlogPost = {
   excerpt: string;
   content: string;
   createdAt: string;
+  viewCount?: number;
+  uniqueViewerCount?: number;
+  avgCompletion?: number;
 };
 
 export const initialBlogPosts: BlogPost[] = [

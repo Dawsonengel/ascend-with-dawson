@@ -1,8 +1,9 @@
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Card } from "@/components/Card";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { theme } from "@/components/Theme";
+import { useAppTheme } from "@/components/Theme";
 
 type LockedGateProps = {
   title: string;
@@ -11,6 +12,9 @@ type LockedGateProps = {
 };
 
 export function LockedGate({ title, lineOne, lineTwo }: LockedGateProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <Card style={styles.card}>
       <Text style={styles.title}>{title}</Text>
@@ -21,18 +25,19 @@ export function LockedGate({ title, lineOne, lineTwo }: LockedGateProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    gap: 10,
-  },
-  title: {
-    color: theme.colors.text,
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  body: {
-    color: theme.colors.mutedText,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-});
+const createStyles = (colors: { text: string; mutedText: string }) =>
+  StyleSheet.create({
+    card: {
+      gap: 10,
+    },
+    title: {
+      color: colors.text,
+      fontSize: 22,
+      fontWeight: "700",
+    },
+    body: {
+      color: colors.mutedText,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+  });

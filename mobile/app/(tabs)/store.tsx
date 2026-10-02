@@ -1,12 +1,16 @@
 import { Linking, StyleSheet, Text, View } from "react-native";
+import { useMemo } from "react";
 
 import { Card } from "@/components/Card";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { theme } from "@/components/Theme";
+import { useAppTheme } from "@/components/Theme";
 
 const STORE_URL = "https://example.com/store";
 
 export default function StoreScreen() {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const openStore = async () => {
     await Linking.openURL(STORE_URL);
   };
@@ -22,25 +26,26 @@ export default function StoreScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-    paddingTop: 76,
-    paddingHorizontal: 20,
-  },
-  title: {
-    color: theme.colors.text,
-    fontSize: 32,
-    fontWeight: "800",
-    marginBottom: 12,
-  },
-  card: {
-    gap: 12,
-  },
-  body: {
-    color: theme.colors.mutedText,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-});
+const createStyles = (colors: { background: string; text: string; mutedText: string }) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+      paddingTop: 76,
+      paddingHorizontal: 20,
+    },
+    title: {
+      color: colors.text,
+      fontSize: 32,
+      fontWeight: "800",
+      marginBottom: 12,
+    },
+    card: {
+      gap: 12,
+    },
+    body: {
+      color: colors.mutedText,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+  });

@@ -1,19 +1,26 @@
 import { Tabs } from "expo-router";
+import { useMemo } from "react";
 
-import { theme } from "@/components/Theme";
+import { useAppTheme } from "@/components/Theme";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 
 export default function TabLayout() {
+  const { colors } = useAppTheme();
+  const tabBarStyle = useMemo(
+    () => ({
+      backgroundColor: colors.background,
+      borderTopColor: colors.border,
+    }),
+    [colors.background, colors.border]
+  );
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.text,
-        tabBarInactiveTintColor: theme.colors.subtleText,
-        tabBarStyle: {
-          backgroundColor: theme.colors.background,
-          borderTopColor: theme.colors.border,
-        },
+        tabBarActiveTintColor: colors.text,
+        tabBarInactiveTintColor: colors.subtleText,
+        tabBarStyle,
       }}
     >
       <Tabs.Screen

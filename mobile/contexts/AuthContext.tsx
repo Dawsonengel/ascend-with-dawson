@@ -6,15 +6,24 @@ import {
   signOut,
   User
 } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { AppState, AppStateStatus } from "react-native";
+
+type UserData = {
+  role?: "admin" | "user";
+  email?: string;
+  publicUsername?: string;
+  [key: string]: unknown;
+};
 
 interface AuthContextType {
   user: User | null;
+  userData: UserData | null;
   role: "admin" | "user" | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, publicUsername?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -22,6 +31,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [role, setRole] = useState<"admin" | "user" | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -36,9 +46,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const userSnap = await getDoc(userRef);
 
         if (userSnap.exists()) {
-          setRole(userSnap.data().role);
+          const data = userSnap.data() as UserData;
+          setUserData(data);
+          setRole(data.role ?? null);
+          console.log("User role:", data?.role);
+        } else {
+          setUserData(null);
+          setRole(null);
+          console.log("User role:", undefined);
         }
       } else {
+        setUserData(null);
         setRole(null);
       }
 
@@ -47,6 +65,54 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const updatePresence = async (isOnline: boolean, shouldTouchLastActive = false) => {
+      try {
+        await setDoc(
+          doc(db, "users", user.uid),
+          {
+            isOnline,
+            ...(shouldTouchLastActive ? { lastActive: serverTimestamp() } : {}),
+          },
+          { merge: true }
+        );
+      } catch (error) {
+        if (isMounted) {
+          console.error("[AuthContext] Failed to update global presence", error);
+        }
+      }
+    };
+
+    void updatePresence(true, true);
+
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      (nextState: AppStateStatus) => {
+        if (nextState === "active") {
+          void updatePresence(true, true);
+        } else if (nextState === "background" || nextState === "inactive") {
+          void updatePresence(false);
+        }
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      appStateSubscription.remove();
+      void setDoc(
+        doc(db, "users", user.uid),
+        { isOnline: false },
+        { merge: true }
+      ).catch(() => undefined);
+    };
+  }, [user?.uid]);
 
   const toAuthError = (error: unknown, action: "login" | "register") => {
     if (typeof error === "object" && error !== null) {
@@ -71,7 +137,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return new Error(`Unknown ${action} error`);
   };
 
-  const register = async (email: string, password: string) => {
+  const register = async (email: string, password: string, publicUsername?: string) => {
     console.log("[AuthContext] register() start", { email });
     try {
       const userCredential = await createUserWithEmailAndPassword(
@@ -89,7 +155,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       await setDoc(doc(db, "users", newUser.uid), {
         email,
-        role
+        role,
+        ...(publicUsername ? { publicUsername } : {}),
       });
 
       console.log("[AuthContext] register() firestore setDoc success", {
@@ -118,7 +185,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, userData, role, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

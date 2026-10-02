@@ -14,8 +14,8 @@ const mobilePdf =
 export default function EbookScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const router = useRouter();
-  const { isPaid } = useMembership();
-  const isLocked = !isPaid;
+  const { hasPremiumAccess } = useMembership();
+  const isLocked = !hasPremiumAccess;
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -48,11 +48,12 @@ export default function EbookScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>Ascend Ebook</Text>
+        <Text style={styles.title}>Ascend: The Framework</Text>
         <View style={styles.badge}>
           <Text style={styles.badgeText}>MEMBERS ONLY</Text>
         </View>
       </View>
+      <View style={styles.divider} />
 
       <Animated.View style={[styles.viewerContainer, { opacity: fadeAnim }]}>
         {pdfView}
@@ -77,16 +78,16 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 70,
-    paddingBottom: 20,
+    paddingBottom: 10,
     paddingHorizontal: 24,
   },
   title: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: "700",
     color: "#111",
   },
   badge: {
-    marginTop: 6,
+    marginTop: 8,
     alignSelf: "flex-start",
     backgroundColor: "#111",
     paddingVertical: 6,
@@ -97,6 +98,12 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontWeight: "600",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(17, 24, 39, 0.12)",
+    marginHorizontal: 24,
+    marginBottom: 10,
   },
   viewerContainer: {
     flex: 1,

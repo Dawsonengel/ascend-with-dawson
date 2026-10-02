@@ -1,12 +1,15 @@
 import { Stack, useLocalSearchParams } from "expo-router";
+import { useMemo } from "react";
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Card } from "@/components/Card";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { theme } from "@/components/Theme";
+import { useAppTheme } from "@/components/Theme";
 import { getEbookById } from "@/data/ebooks";
 
 export default function EbookDetailScreen() {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const params = useLocalSearchParams<{ id: string }>();
   const ebook = getEbookById(params.id ?? "");
 
@@ -55,50 +58,57 @@ export default function EbookDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-    paddingTop: 90,
-    paddingHorizontal: 20,
-  },
-  card: {
-    gap: 12,
-  },
-  cover: {
-    width: "100%",
-    height: 170,
-    borderRadius: 14,
-  },
-  title: {
-    color: theme.colors.text,
-    fontSize: 28,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: theme.colors.subtleText,
-    fontSize: 15,
-  },
-  description: {
-    color: theme.colors.mutedText,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  progress: {
-    color: theme.colors.subtleText,
-    fontSize: 14,
-    marginTop: 2,
-  },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 14,
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-  secondaryButtonText: {
-    color: theme.colors.text,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});
+const createStyles = (colors: {
+  background: string;
+  border: string;
+  text: string;
+  mutedText: string;
+  subtleText: string;
+}) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+      paddingTop: 90,
+      paddingHorizontal: 20,
+    },
+    card: {
+      gap: 12,
+    },
+    cover: {
+      width: "100%",
+      height: 170,
+      borderRadius: 14,
+    },
+    title: {
+      color: colors.text,
+      fontSize: 28,
+      fontWeight: "800",
+    },
+    subtitle: {
+      color: colors.subtleText,
+      fontSize: 15,
+    },
+    description: {
+      color: colors.mutedText,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+    progress: {
+      color: colors.subtleText,
+      fontSize: 14,
+      marginTop: 2,
+    },
+    secondaryButton: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      alignItems: "center",
+      paddingVertical: 12,
+    },
+    secondaryButtonText: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+  });

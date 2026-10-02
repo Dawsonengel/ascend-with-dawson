@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRouter } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -10,23 +11,30 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
 
-import { theme } from "@/components/Theme";
+import { useAppTheme } from "@/components/Theme";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMembership } from "@/context/MembershipContext";
 import { db } from "@/firebaseConfig";
 import {
   Timestamp,
   addDoc,
   collection,
-  doc,
-  getDoc,
   limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  where,
 } from "firebase/firestore";
+
+let BlurView: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  BlurView = require("expo-blur").BlurView;
+} catch {
+  BlurView = null;
+}
 
 type ChatMessage = {
   id: string;
@@ -39,44 +47,32 @@ type ChatMessage = {
 
 export default function CommunityScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { colors, resolvedScheme } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, resolvedScheme), [colors, resolvedScheme]);
+  const { user, userData } = useAuth();
+  const { hasPremiumAccess } = useMembership();
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [role, setRole] = useState<string | null>(null);
+  const [onlineCount, setOnlineCount] = useState(0);
 
-  const username = user?.displayName?.trim() || user?.email?.split("@")[0] || "Member";
+  const username =
+    typeof userData?.publicUsername === "string" && userData.publicUsername.trim()
+      ? userData.publicUsername.trim()
+      : "Member";
   const currentUserId = user?.uid ?? "";
-  const isMember = role === "member";
+  const hasCommunityAccess = hasPremiumAccess;
 
   useEffect(() => {
-    if (!currentUserId) {
-      setRole(null);
-      return;
-    }
+    const onlineUsersQuery = query(collection(db, "users"), where("isOnline", "==", true));
 
-    let isActive = true;
+    const unsubscribe = onSnapshot(onlineUsersQuery, (snapshot) => {
+      setOnlineCount(snapshot.size);
+    });
 
-    getDoc(doc(db, "users", currentUserId))
-      .then((snap) => {
-        if (!isActive) {
-          return;
-        }
-        const nextRole = snap.exists() ? (snap.data().role as string | undefined) : null;
-        setRole(nextRole ?? null);
-      })
-      .catch((error) => {
-        console.error("[Community] Failed to fetch user role", error);
-        if (isActive) {
-          setRole(null);
-        }
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, [currentUserId]);
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     const messagesQuery = query(
@@ -166,7 +162,7 @@ export default function CommunityScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.title}>Ascend Community</Text>
-        <Text style={styles.subtitle}>Members online</Text>
+        <Text style={styles.subtitle}>Members Online ({onlineCount})</Text>
       </View>
 
       <View style={styles.chatArea}>
@@ -174,11 +170,13 @@ export default function CommunityScreen() {
             ref={listRef}
             data={messages}
             inverted
-            scrollEnabled={isMember}
+            scrollEnabled={hasCommunityAccess}
+            pointerEvents={hasCommunityAccess ? "auto" : "none"}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messagesContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            style={[styles.messagesList, !hasCommunityAccess && styles.previewList]}
             renderItem={({ item }) => {
               const isCurrentUser = item.userId === currentUserId;
 
@@ -191,11 +189,27 @@ export default function CommunityScreen() {
                       item.pending && styles.pendingBubble,
                     ]}
                   >
-                    {!isCurrentUser ? <Text style={styles.username}>{item.username}</Text> : null}
-                    <Text style={[styles.messageText, isCurrentUser && styles.messageTextRight]}>
+                    {!isCurrentUser ? (
+                      <Text style={[styles.username, !hasCommunityAccess && styles.gatedMetaText]}>
+                        {item.username}
+                      </Text>
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.messageText,
+                        isCurrentUser && styles.messageTextRight,
+                        !hasCommunityAccess && styles.gatedMessageText,
+                      ]}
+                    >
                       {item.text}
                     </Text>
-                    <Text style={[styles.timestamp, isCurrentUser && styles.timestampRight]}>
+                    <Text
+                      style={[
+                        styles.timestamp,
+                        isCurrentUser && styles.timestampRight,
+                        !hasCommunityAccess && styles.gatedMetaText,
+                      ]}
+                    >
                       {item.pending ? "sending..." : formatTime(item.createdAt)}
                     </Text>
                   </View>
@@ -205,13 +219,13 @@ export default function CommunityScreen() {
             ListEmptyComponent={<Text style={styles.empty}>No messages yet. Start the conversation.</Text>}
           />
 
-          {isMember ? (
+          {hasCommunityAccess ? (
             <View style={styles.inputWrap}>
               <TextInput
                 value={input}
                 onChangeText={setInput}
                 placeholder="Message..."
-                placeholderTextColor={theme.colors.subtleText}
+                placeholderTextColor={colors.subtleText}
                 style={styles.input}
                 multiline
                 maxLength={300}
@@ -229,11 +243,15 @@ export default function CommunityScreen() {
             </View>
           ) : null}
 
-          {!isMember ? (
+          {!hasCommunityAccess ? (
             <View style={styles.previewOverlay}>
+              {BlurView ? (
+                <BlurView intensity={88} tint="dark" style={StyleSheet.absoluteFill} />
+              ) : null}
+              <View style={styles.previewGradient} />
               <View style={styles.previewCard}>
                 <Text style={styles.previewTitle}>Private Community</Text>
-                <Text style={styles.previewText}>Join the movement to participate.</Text>
+                <Text style={styles.previewText}>Community is reserved for committed members.</Text>
                 <Pressable style={styles.previewButton} onPress={() => router.push("/store")}>
                   <Text style={styles.previewButtonText}>Unlock Access</Text>
                 </Pressable>
@@ -245,174 +263,212 @@ export default function CommunityScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-    paddingTop: 76,
-    paddingHorizontal: 16,
+const createStyles = (
+  colors: {
+    background: string;
+    card: string;
+    border: string;
+    text: string;
+    subtleText: string;
+    primaryButton: string;
+    primaryButtonText: string;
   },
-  title: {
-    color: theme.colors.text,
-    fontSize: 32,
-    fontWeight: "800",
-  },
-  header: {
-    paddingHorizontal: 4,
-    marginBottom: 10,
-  },
-  subtitle: {
-    color: theme.colors.subtleText,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  chatArea: {
-    flex: 1,
-    position: "relative",
-  },
-  messagesContent: {
-    paddingHorizontal: 4,
-    paddingBottom: 12,
-    gap: 8,
-  },
-  messageRow: {
-    width: "100%",
-    marginBottom: 8,
-  },
-  rowLeft: {
-    alignItems: "flex-start",
-  },
-  rowRight: {
-    alignItems: "flex-end",
-  },
-  bubble: {
-    maxWidth: "82%",
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  bubbleLeft: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderBottomLeftRadius: 6,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  bubbleRight: {
-    backgroundColor: "#f5f5f5",
-    borderBottomRightRadius: 6,
-  },
-  pendingBubble: {
-    opacity: 0.6,
-  },
-  username: {
-    color: theme.colors.subtleText,
-    fontSize: 11,
-    fontWeight: "600",
-    marginBottom: 3,
-  },
-  messageText: {
-    color: theme.colors.text,
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  messageTextRight: {
-    color: "#0e0e0e",
-  },
-  timestamp: {
-    marginTop: 4,
-    color: theme.colors.subtleText,
-    fontSize: 11,
-    alignSelf: "flex-start",
-  },
-  timestampRight: {
-    color: "rgba(14,14,14,0.62)",
-    alignSelf: "flex-end",
-  },
-  empty: {
-    color: theme.colors.subtleText,
-    textAlign: "center",
-    marginTop: 20,
-    fontSize: 14,
-  },
-  inputWrap: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    paddingTop: 10,
-    paddingBottom: Platform.OS === "ios" ? 20 : 10,
-    backgroundColor: theme.colors.background,
-  },
-  input: {
-    flex: 1,
-    minHeight: 42,
-    maxHeight: 110,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    color: theme.colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-  },
-  sendButton: {
-    height: 42,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: theme.colors.primaryButton,
-  },
-  sendButtonDisabled: {
-    opacity: 0.6,
-  },
-  sendButtonText: {
-    color: theme.colors.primaryButtonText,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  previewOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-  },
-  previewCard: {
-    width: "100%",
-    maxWidth: 320,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.card,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    alignItems: "center",
-    gap: 8,
-  },
-  previewTitle: {
-    color: theme.colors.text,
-    fontSize: 22,
-    fontWeight: "800",
-  },
-  previewText: {
-    color: theme.colors.subtleText,
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  previewButton: {
-    marginTop: 4,
-    backgroundColor: theme.colors.primaryButton,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  previewButtonText: {
-    color: theme.colors.primaryButtonText,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-});
+  resolvedScheme: "light" | "dark"
+) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+      paddingTop: 76,
+      paddingHorizontal: 16,
+    },
+    title: {
+      color: colors.text,
+      fontSize: 32,
+      fontWeight: "800",
+    },
+    header: {
+      paddingHorizontal: 4,
+      marginBottom: 10,
+      backgroundColor: "transparent",
+    },
+    subtitle: {
+      color: colors.subtleText,
+      fontSize: 12,
+      marginTop: 2,
+    },
+    chatArea: {
+      flex: 1,
+      position: "relative",
+      backgroundColor: colors.background,
+    },
+    messagesList: {
+      backgroundColor: colors.background,
+    },
+    messagesContent: {
+      paddingHorizontal: 4,
+      paddingBottom: 12,
+      gap: 8,
+    },
+    previewList: {
+      opacity: 0.46,
+    },
+    messageRow: {
+      width: "100%",
+      marginBottom: 8,
+    },
+    rowLeft: {
+      alignItems: "flex-start",
+    },
+    rowRight: {
+      alignItems: "flex-end",
+    },
+    bubble: {
+      maxWidth: "82%",
+      borderRadius: 18,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    bubbleLeft: {
+      backgroundColor: resolvedScheme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.07)",
+      borderBottomLeftRadius: 6,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    bubbleRight: {
+      backgroundColor: colors.primaryButton,
+      borderBottomRightRadius: 6,
+    },
+    pendingBubble: {
+      opacity: 0.6,
+    },
+    username: {
+      color: colors.subtleText,
+      fontSize: 11,
+      fontWeight: "600",
+      marginBottom: 3,
+    },
+    messageText: {
+      color: colors.text,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+    messageTextRight: {
+      color: colors.primaryButtonText,
+    },
+    timestamp: {
+      marginTop: 4,
+      color: colors.subtleText,
+      fontSize: 11,
+      alignSelf: "flex-start",
+    },
+    timestampRight: {
+      color: resolvedScheme === "dark" ? "rgba(14,14,14,0.62)" : "rgba(248,250,252,0.62)",
+      alignSelf: "flex-end",
+    },
+    gatedMessageText: {
+      opacity: 0.56,
+    },
+    gatedMetaText: {
+      opacity: 0.5,
+    },
+    empty: {
+      color: colors.subtleText,
+      textAlign: "center",
+      marginTop: 20,
+      fontSize: 14,
+    },
+    inputWrap: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      gap: 8,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: 10,
+      paddingBottom: Platform.OS === "ios" ? 20 : 10,
+      backgroundColor: colors.background,
+    },
+    input: {
+      flex: 1,
+      minHeight: 42,
+      maxHeight: 110,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: resolvedScheme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.04)",
+      color: colors.text,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 15,
+    },
+    sendButton: {
+      height: 42,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.primaryButton,
+    },
+    sendButtonDisabled: {
+      opacity: 0.6,
+    },
+    sendButtonText: {
+      color: colors.primaryButtonText,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    previewOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: resolvedScheme === "dark" ? "rgba(8,12,18,0.26)" : "rgba(15,23,42,0.18)",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 24,
+    },
+    previewGradient: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: resolvedScheme === "dark" ? "rgba(8,12,18,0.16)" : "rgba(15,23,42,0.1)",
+      ...(Platform.OS === "web"
+        ? ({
+            background:
+              resolvedScheme === "dark"
+                ? "linear-gradient(180deg, rgba(8,12,18,0.02) 0%, rgba(8,12,18,0.12) 45%, rgba(8,12,18,0.24) 100%)"
+                : "linear-gradient(180deg, rgba(15,23,42,0.02) 0%, rgba(15,23,42,0.08) 45%, rgba(15,23,42,0.18) 100%)",
+          } as never)
+        : {}),
+    },
+    previewCard: {
+      width: "100%",
+      maxWidth: 320,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      paddingHorizontal: 18,
+      paddingVertical: 16,
+      alignItems: "center",
+      gap: 8,
+    },
+    previewTitle: {
+      color: colors.text,
+      fontSize: 22,
+      fontWeight: "800",
+    },
+    previewText: {
+      color: colors.subtleText,
+      fontSize: 14,
+      textAlign: "center",
+      lineHeight: 20,
+    },
+    previewButton: {
+      marginTop: 4,
+      backgroundColor: colors.primaryButton,
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+    },
+    previewButtonText: {
+      color: colors.primaryButtonText,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+  });

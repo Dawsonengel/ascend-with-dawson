@@ -1,14 +1,16 @@
 import { Stack, useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Card } from "@/components/Card";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { theme } from "@/components/Theme";
+import { useAppTheme } from "@/components/Theme";
 import { saveWin } from "@/data/local-store";
 
 export default function WinScreen() {
   const router = useRouter();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [text, setText] = useState("");
 
   const onSave = () => {
@@ -34,7 +36,7 @@ export default function WinScreen() {
           value={text}
           onChangeText={setText}
           placeholder="I honored one commitment to myself..."
-          placeholderTextColor={theme.colors.subtleText}
+          placeholderTextColor={colors.subtleText}
           style={styles.input}
           multiline
           textAlignVertical="top"
@@ -46,37 +48,38 @@ export default function WinScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-    paddingTop: 80,
-    paddingHorizontal: 20,
-  },
-  title: {
-    color: theme.colors.text,
-    fontSize: 32,
-    fontWeight: "800",
-    marginBottom: 16,
-  },
-  card: {
-    gap: 14,
-  },
-  label: {
-    color: theme.colors.text,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  input: {
-    minHeight: 120,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    color: theme.colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    lineHeight: 20,
-  },
-});
+const createStyles = (colors: { background: string; border: string; text: string }) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+      paddingTop: 80,
+      paddingHorizontal: 20,
+    },
+    title: {
+      color: colors.text,
+      fontSize: 32,
+      fontWeight: "800",
+      marginBottom: 16,
+    },
+    card: {
+      gap: 14,
+    },
+    label: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    input: {
+      minHeight: 120,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: "rgba(255,255,255,0.04)",
+      color: colors.text,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+  });
